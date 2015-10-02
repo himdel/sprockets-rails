@@ -38,6 +38,15 @@ module Sprockets
         end
       end
 
+      class MultipleAssetCandidatesError < ArgumentError
+        def initialize(source, candidates)
+          msg = "Assets should have just one valid resolve. " <<
+                "Use only one dependency to provide #{source.inspect}. " <<
+                "Candidates: #{candidates.inspect}"
+          super(msg)
+        end
+      end
+
       if defined? ActionView::Helpers::AssetUrlHelper
         include ActionView::Helpers::AssetUrlHelper
         include ActionView::Helpers::AssetTagHelper
@@ -85,9 +94,9 @@ module Sprockets
       # Computes the full URL to a asset in the public directory. This
       # method checks for errors before returning path.
       def asset_path(source, options = {})
-        unless options[:debug]
+        #unless options[:debug]
           check_errors_for(source, options)
-        end
+        #end
         super(source, options)
       end
       alias :path_to_asset :asset_path
@@ -182,16 +191,16 @@ module Sprockets
         # Raise errors when source is not in the precompiled list, or
         # incorrectly contains the assets_prefix.
         def check_errors_for(source, options)
-          return unless self.raise_runtime_errors
+          #return unless self.raise_runtime_errors
 
           source = source.to_s
           return if source.blank? || source =~ URI_REGEXP
 
           asset = lookup_asset_for_path(source, options)
 
-          if asset && asset_needs_precompile?(asset.logical_path, asset.pathname.to_s)
-            raise AssetFilteredError.new(asset.logical_path)
-          end
+          #if asset && asset_needs_precompile?(asset.logical_path, asset.pathname.to_s)
+          #  raise AssetFilteredError.new(asset.logical_path)
+          #end
 
           full_prefix = File.join(self.assets_prefix || "/", '')
           if !asset && source.start_with?(full_prefix)
@@ -199,6 +208,13 @@ module Sprockets
             if lookup_asset_for_path(short_path, options)
               raise AbsoluteAssetPathError.new(source, short_path, full_prefix)
             end
+          end
+
+          assets = lookup_assets_for_path(source, options)
+          p [ source, assets.length ]
+          if assets.length > 1
+            #raise MultipleAssetCandidatesError.new(source, assets)
+            p MultipleAssetCandidatesError.new(source, assets).to_s
           end
         end
 
@@ -228,6 +244,21 @@ module Sprockets
             path = "#{path}#{extname}"
           end
           env[path]
+        end
+
+        # Internal method to support debugging multiple candidates for the same path
+        def lookup_assets_for_path(path, options = {})
+          return unless env = assets_environment
+          path = path.to_s
+          if extname = compute_asset_extname(path, options)
+            path = "#{path}#{extname}"
+          end
+
+          assets = []
+          env.resolve(path) do |p|
+            assets << p
+          end
+          assets
         end
     end
   end
